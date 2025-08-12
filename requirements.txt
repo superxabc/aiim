@@ -1,0 +1,14 @@
+fastapi==0.111.0
+uvicorn[standard]==0.30.0
+SQLAlchemy==2.0.31
+pydantic==2.7.1
+prometheus-client==0.20.0
+# auth & settings
+python-jose[cryptography]==3.3.0
+pydantic-settings==2.3.4
+# optional redis (Pub/Sub). If not available, service falls back to in-memory
+redis==5.0.7
+# migrations & drivers & server
+alembic==1.13.2
+psycopg2-binary==2.9.9
+gunicorn==21.2.0

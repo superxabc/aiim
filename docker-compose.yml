@@ -1,0 +1,29 @@
+version: '3.9'
+services:
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: im
+      POSTGRES_PASSWORD: im_pass
+      POSTGRES_DB: imdb
+    ports:
+      - "5432:5432"
+  im:
+    build: .
+    image: im-platform:local
+    depends_on:
+      - redis
+      - postgres
+    environment:
+      JWT_SECRET: please_change_me
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql+psycopg2://im:im_pass@postgres:5432/imdb
+      INSTANCE_ID: im-instance-1
+      RATE_LIMIT_PER_SEC: 10
+    ports:
+      - "8083:8083"
+
