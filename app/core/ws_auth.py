@@ -25,11 +25,12 @@ def get_user_id_from_websocket(websocket: WebSocket) -> Optional[str]:
     if not token:
         return None
     try:
-        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+        payload = jwt.decode(
+            token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM]
+        )
         return payload.get("sub")
     except Exception:
         return None
-
 
 
 def get_current_user_id_from_request(request: Request) -> Optional[str]:
@@ -38,7 +39,9 @@ def get_current_user_id_from_request(request: Request) -> Optional[str]:
     Supports headers in the form: Authorization: Bearer <token>
     Falls back to `token` query parameter for convenience in dev.
     """
-    auth_header = request.headers.get("authorization") or request.headers.get("Authorization")
+    auth_header = request.headers.get("authorization") or request.headers.get(
+        "Authorization"
+    )
     token: Optional[str] = None
     if auth_header and auth_header.lower().startswith("bearer "):
         token = auth_header.split(" ", 1)[1].strip()
@@ -47,8 +50,9 @@ def get_current_user_id_from_request(request: Request) -> Optional[str]:
     if not token:
         return None
     try:
-        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+        payload = jwt.decode(
+            token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM]
+        )
         return payload.get("sub")
     except Exception:
         return None
-

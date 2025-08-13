@@ -20,7 +20,9 @@ def create_conversation(
     try:
         user_id = get_current_user_id_from_request(request)
         if not user_id:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token"
+            )
         # Ensure creator is first member
         if user_id not in req.member_ids:
             req.member_ids.insert(0, user_id)
@@ -51,9 +53,12 @@ async def create_message(
     try:
         user_id = get_current_user_id_from_request(request)
         if not user_id:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token"
+            )
         # 生成 seq（在事件循环中）
         from app.core.seq import next_seq
+
         seq_value = await next_seq(req.conversation_id)
         # 幂等：若携带 client_msg_id，先检查是否已存在
         if req.client_msg_id:
@@ -85,12 +90,16 @@ async def create_stream_chunk(
     try:
         user_id = get_current_user_id_from_request(request)
         if not user_id:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token"
+            )
         conv_id = body.get("conversation_id")
         chunk = body.get("chunk")
         stream_end = bool(body.get("stream_end", False))
         if not conv_id or chunk is None:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="invalid payload")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="invalid payload"
+            )
         # 成员校验
         member = (
             db.query(im_model.ConversationMember)
@@ -101,9 +110,12 @@ async def create_stream_chunk(
             .first()
         )
         if not member:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="forbidden"
+            )
         # 生成序列并入库
         from app.core.seq import next_seq
+
         seq_value = await next_seq(conv_id)
         msg = im_service.create_stream_chunk(
             db,
@@ -144,8 +156,12 @@ def list_messages(
                 .first()
             )
             if not member:
-                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
-        items = im_service.list_messages(db, conversation_id, limit=limit, before_id=before_id, after_seq=after_seq)
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN, detail="forbidden"
+                )
+        items = im_service.list_messages(
+            db, conversation_id, limit=limit, before_id=before_id, after_seq=after_seq
+        )
         return {"conversation_id": conversation_id, "messages": items}
     except HTTPException:
         raise
@@ -161,11 +177,15 @@ def mark_delivered(
 ):
     user_id = get_current_user_id_from_request(request)
     if not user_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token"
+        )
     conv_id = body.get("conversation_id")
     message_id = body.get("message_id")
     if not conv_id or not message_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="invalid payload")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="invalid payload"
+        )
     # 成员校验（发送 delivered 的必须是会话成员）
     member = (
         db.query(im_model.ConversationMember)
@@ -179,6 +199,7 @@ def mark_delivered(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     # 更新持久化状态并广播（per-user receipts）
     from app.services.receipts_service import mark_delivered as svc_mark_delivered
+
     svc_mark_delivered(db, conv_id, message_id, user_id)
     return
 
@@ -191,7 +212,9 @@ def mark_read(
 ):
     user_id = get_current_user_id_from_request(request)
     if not user_id or user_id != req.user_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token"
+        )
     receipts_service.mark_read(db, req)
     return
 
@@ -205,7 +228,9 @@ def get_receipts(
 ):
     user_id = get_current_user_id_from_request(request)
     if not user_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token"
+        )
     # 仅会话成员可查看
     member = (
         db.query(im_model.ConversationMember)
@@ -230,5 +255,3 @@ def get_receipts(
             for r in items
         ],
     }
-
-

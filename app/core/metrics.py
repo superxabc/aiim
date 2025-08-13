@@ -6,11 +6,14 @@ import time
 try:
     from prometheus_client import Counter, Histogram
 except Exception:  # pragma: no cover
+
     class _NoopMetric:
         def labels(self, *_, **__):
             return self
+
         def inc(self, *_, **__):
             return None
+
         def observe(self, *_, **__):
             return None
 
@@ -21,7 +24,9 @@ except Exception:  # pragma: no cover
         return _NoopMetric()
 
 
-HTTP_REQUESTS = Counter("http_requests_total", "HTTP requests total", ["method", "path", "status"])
+HTTP_REQUESTS = Counter(
+    "http_requests_total", "HTTP requests total", ["method", "path", "status"]
+)
 HTTP_REQUEST_LATENCY = Histogram(
     "http_request_duration_seconds",
     "HTTP request duration in seconds",
@@ -44,6 +49,6 @@ def add_metrics_middleware(app):
             path = "/".join([p for p in request.url.path.split("/") if p][:2])
             path = f"/{path}" if path else "/"
             HTTP_REQUESTS.labels(method=method, path=path, status=status).inc()
-            HTTP_REQUEST_LATENCY.labels(method=method, path=path, status=status).observe(time.time() - start)
-
-
+            HTTP_REQUEST_LATENCY.labels(
+                method=method, path=path, status=status
+            ).observe(time.time() - start)

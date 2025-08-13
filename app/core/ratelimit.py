@@ -25,7 +25,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         # 跳过健康/指标
         path = request.url.path
-        if path.startswith("/health") or path.startswith("/metrics") or path.startswith("/api/aiim/ws"):
+        if (
+            path.startswith("/health")
+            or path.startswith("/metrics")
+            or path.startswith("/api/aiim/ws")
+        ):
             return await call_next(request)
 
         identifier = request.headers.get("Authorization") or request.client.host
@@ -52,5 +56,3 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return Response(status_code=429, content="rate limit exceeded")
 
         return await call_next(request)
-
-

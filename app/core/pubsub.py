@@ -7,6 +7,7 @@ from .config import settings
 
 try:
     from redis import asyncio as aioredis  # type: ignore
+
     REDIS_AVAILABLE = True
 except Exception:  # pragma: no cover
     aioredis = None
@@ -71,7 +72,9 @@ class RedisPubSub:
         async def reader():
             try:
                 while True:
-                    message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
+                    message = await pubsub.get_message(
+                        ignore_subscribe_messages=True, timeout=1.0
+                    )
                     if message is None:
                         await asyncio.sleep(0.05)
                         continue
@@ -79,6 +82,7 @@ class RedisPubSub:
                     # 调用方 publish 的是 JSON 序列化后的对象
                     try:
                         import json
+
                         if isinstance(data, (bytes, bytearray)):
                             data = json.loads(data.decode("utf-8"))
                         elif isinstance(data, str):
@@ -109,6 +113,7 @@ class RedisPubSub:
     async def publish(self, channel: str, data: Any) -> None:
         try:
             import json
+
             payload = json.dumps(data)
         except Exception:
             payload = data
@@ -136,6 +141,7 @@ class RedisPubSub:
             return None
         try:
             import json
+
             if isinstance(val, (bytes, bytearray)):
                 return json.loads(val.decode("utf-8"))
             if isinstance(val, str):
@@ -144,7 +150,8 @@ class RedisPubSub:
             return None
 
 
-
-pubsub = RedisPubSub(settings.REDIS_URL) if (REDIS_AVAILABLE and settings.REDIS_URL) else InMemoryPubSub()
-
-
+pubsub = (
+    RedisPubSub(settings.REDIS_URL)
+    if (REDIS_AVAILABLE and settings.REDIS_URL)
+    else InMemoryPubSub()
+)

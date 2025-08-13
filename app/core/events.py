@@ -16,5 +16,3 @@ def publish_event_async(channel: str, payload: Any) -> None:
         loop.create_task(pubsub.publish(channel, payload))
     except RuntimeError:
         asyncio.run(pubsub.publish(channel, payload))
-
-

@@ -26,7 +26,11 @@ async def im_gateway(websocket: WebSocket):
     await websocket.accept()
     # 在线路由登记（Redis可用时）
     try:
-        info = {"instance_id": settings.INSTANCE_ID, "platform": "ws", "last_ping_ts": 0}
+        info = {
+            "instance_id": settings.INSTANCE_ID,
+            "platform": "ws",
+            "last_ping_ts": 0,
+        }
         if hasattr(pubsub, "set_connection"):
             await pubsub.set_connection(user_id, json.dumps(info), ttl_sec=60)  # type: ignore
     except Exception:
@@ -55,6 +59,7 @@ async def im_gateway(websocket: WebSocket):
                 # 成员校验（最小实现，非持久连接上下文中创建 session）
                 try:
                     from app.core.database import SessionLocal
+
                     db = SessionLocal()
                     member = (
                         db.query(im_model.ConversationMember)
@@ -65,7 +70,9 @@ async def im_gateway(websocket: WebSocket):
                         .first()
                     )
                     if not member:
-                        await websocket.send_text(json.dumps({"type": "error", "message": "forbidden"}))
+                        await websocket.send_text(
+                            json.dumps({"type": "error", "message": "forbidden"})
+                        )
                         continue
                 finally:
                     try:
@@ -81,11 +88,17 @@ async def im_gateway(websocket: WebSocket):
                         payload = await queue.get()
                         if payload is None:
                             break
-                        await websocket.send_text(json.dumps({"type": "event", "channel": channel, "data": payload}))
+                        await websocket.send_text(
+                            json.dumps(
+                                {"type": "event", "channel": channel, "data": payload}
+                            )
+                        )
 
                 subscriptions[chan] = q
                 asyncio.create_task(forwarder(chan, q))
-                await websocket.send_text(json.dumps({"type": "subscribed", "conversation_id": conv_id}))
+                await websocket.send_text(
+                    json.dumps({"type": "subscribed", "conversation_id": conv_id})
+                )
 
             elif t == "unsubscribe":
                 conv_id = data.get("conversation_id")
@@ -95,13 +108,19 @@ async def im_gateway(websocket: WebSocket):
                 q = subscriptions.pop(chan, None)
                 if q:
                     await pubsub.unsubscribe(chan, q)
-                await websocket.send_text(json.dumps({"type": "unsubscribed", "conversation_id": conv_id}))
+                await websocket.send_text(
+                    json.dumps({"type": "unsubscribed", "conversation_id": conv_id})
+                )
 
             elif t == "pong":
                 last_pong = asyncio.get_event_loop().time()
                 # 续期路由信息
                 try:
-                    info = {"instance_id": settings.INSTANCE_ID, "platform": "ws", "last_ping_ts": int(last_pong)}
+                    info = {
+                        "instance_id": settings.INSTANCE_ID,
+                        "platform": "ws",
+                        "last_ping_ts": int(last_pong),
+                    }
                     if hasattr(pubsub, "set_connection"):
                         await pubsub.set_connection(user_id, json.dumps(info), ttl_sec=60)  # type: ignore
                 except Exception:
@@ -114,11 +133,14 @@ async def im_gateway(websocket: WebSocket):
                     content = data.get("content")
                     msg_type = data.get("msg_type", "text")
                     if not conv_id or not content:
-                        await websocket.send_text(json.dumps({"type": "error", "message": "invalid payload"}))
+                        await websocket.send_text(
+                            json.dumps({"type": "error", "message": "invalid payload"})
+                        )
                         continue
                     try:
                         from app.core.database import SessionLocal
                         from app.core.seq import next_seq
+
                         db = SessionLocal()
                         # 先生成 seq（在事件循环中）
                         seq_value = await next_seq(conv_id)
@@ -130,13 +152,21 @@ async def im_gateway(websocket: WebSocket):
                                 .filter(
                                     im_model.IMMessage.conversation_id == conv_id,
                                     im_model.IMMessage.sender_id == user_id,
-                                    im_model.IMMessage.client_msg_id == data.get("client_msg_id"),
+                                    im_model.IMMessage.client_msg_id
+                                    == data.get("client_msg_id"),
                                 )
                                 .first()
                             )
                         if existing:
                             await websocket.send_text(
-                                json.dumps({"type": "ack", "event": "message.sent", "message_id": existing.message_id, "seq": existing.seq})
+                                json.dumps(
+                                    {
+                                        "type": "ack",
+                                        "event": "message.sent",
+                                        "message_id": existing.message_id,
+                                        "seq": existing.seq,
+                                    }
+                                )
                             )
                             continue
                         req = im_model.MessageCreateRequest(
@@ -147,12 +177,23 @@ async def im_gateway(websocket: WebSocket):
                             client_msg_id=data.get("client_msg_id"),
                             tenant_id=data.get("tenant_id"),
                         )
-                        msg = im_service.create_message(db, req, sender_id=user_id, seq_value=seq_value)
+                        msg = im_service.create_message(
+                            db, req, sender_id=user_id, seq_value=seq_value
+                        )
                         await websocket.send_text(
-                            json.dumps({"type": "ack", "event": "message.sent", "message_id": msg.message_id, "seq": msg.seq})
+                            json.dumps(
+                                {
+                                    "type": "ack",
+                                    "event": "message.sent",
+                                    "message_id": msg.message_id,
+                                    "seq": msg.seq,
+                                }
+                            )
                         )
                     except Exception as e:
-                        await websocket.send_text(json.dumps({"type": "error", "message": str(e)}))
+                        await websocket.send_text(
+                            json.dumps({"type": "error", "message": str(e)})
+                        )
                     finally:
                         try:
                             db.close()
@@ -163,11 +204,14 @@ async def im_gateway(websocket: WebSocket):
                     chunk = data.get("chunk")
                     stream_end = bool(data.get("stream_end", False))
                     if not conv_id or chunk is None:
-                        await websocket.send_text(json.dumps({"type": "error", "message": "invalid payload"}))
+                        await websocket.send_text(
+                            json.dumps({"type": "error", "message": "invalid payload"})
+                        )
                         continue
                     try:
                         from app.core.database import SessionLocal
                         from app.core.seq import next_seq
+
                         db = SessionLocal()
                         seq_value = await next_seq(conv_id)
                         msg = im_service.create_stream_chunk(
@@ -181,10 +225,20 @@ async def im_gateway(websocket: WebSocket):
                             seq_value=seq_value,
                         )
                         await websocket.send_text(
-                            json.dumps({"type": "ack", "event": "stream.sent", "message_id": msg.message_id, "seq": msg.seq, "stream_end": stream_end})
+                            json.dumps(
+                                {
+                                    "type": "ack",
+                                    "event": "stream.sent",
+                                    "message_id": msg.message_id,
+                                    "seq": msg.seq,
+                                    "stream_end": stream_end,
+                                }
+                            )
                         )
                     except Exception as e:
-                        await websocket.send_text(json.dumps({"type": "error", "message": str(e)}))
+                        await websocket.send_text(
+                            json.dumps({"type": "error", "message": str(e)})
+                        )
                     finally:
                         try:
                             db.close()
@@ -196,6 +250,7 @@ async def im_gateway(websocket: WebSocket):
                     if conv_id and message_id:
                         from app.core.database import SessionLocal
                         from app.services.receipts_service import mark_delivered
+
                         db = SessionLocal()
                         try:
                             # per-user delivered（校验成员在 service 内/或下层 API 负责）
@@ -217,5 +272,3 @@ async def im_gateway(websocket: WebSocket):
                 await pubsub.unsubscribe(chan, q)
         except Exception:
             pass
-
-

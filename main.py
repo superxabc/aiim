@@ -36,6 +36,7 @@ def health():
     try:
         if settings.REQUIRE_REDIS:
             from app.core.seq import _redis_client  # type: ignore
+
             dep["redis"] = _redis_client is not None
     except Exception:
         dep["redis"] = False
@@ -56,6 +57,3 @@ async def on_shutdown():
             await pubsub.close()  # type: ignore
     except Exception:
         pass
-
-
-

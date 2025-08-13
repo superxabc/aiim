@@ -14,7 +14,9 @@ class ReceiptReadRequestBody(BaseModel):
     last_read_message_id: str
 
 
-def _upsert_receipt_read(db: Session, conversation_id: str, message_id: str, user_id: str) -> None:
+def _upsert_receipt_read(
+    db: Session, conversation_id: str, message_id: str, user_id: str
+) -> None:
     rec = (
         db.query(im_model.MessageReceipt)
         .filter(
@@ -40,7 +42,9 @@ def _upsert_receipt_read(db: Session, conversation_id: str, message_id: str, use
     db.commit()
 
 
-def _upsert_receipt_delivered(db: Session, conversation_id: str, message_id: str, user_id: str) -> None:
+def _upsert_receipt_delivered(
+    db: Session, conversation_id: str, message_id: str, user_id: str
+) -> None:
     rec = (
         db.query(im_model.MessageReceipt)
         .filter(
@@ -98,7 +102,9 @@ def mark_read(db: Session, req: ReceiptReadRequestBody) -> None:
     db.commit()
     # 写入 per-user receipts（只为锚点消息 upsert）
     try:
-        _upsert_receipt_read(db, req.conversation_id, req.last_read_message_id, req.user_id)
+        _upsert_receipt_read(
+            db, req.conversation_id, req.last_read_message_id, req.user_id
+        )
     except Exception:
         pass
 
@@ -109,15 +115,20 @@ def mark_read(db: Session, req: ReceiptReadRequestBody) -> None:
             "conversation_id": req.conversation_id,
             "user_id": req.user_id,
             "last_read_message_id": req.last_read_message_id,
-            "last_read_seq": member.last_read_seq if anchor and anchor.seq is not None else None,
+            "last_read_seq": (
+                member.last_read_seq if anchor and anchor.seq is not None else None
+            ),
         }
         import asyncio
+
         asyncio.create_task(pubsub.publish(f"im:conv:{req.conversation_id}", payload))
     except Exception:
         pass
 
 
-def mark_delivered(db: Session, conversation_id: str, message_id: str, user_id: str) -> None:
+def mark_delivered(
+    db: Session, conversation_id: str, message_id: str, user_id: str
+) -> None:
     msg = (
         db.query(im_model.IMMessage)
         .filter(
@@ -157,6 +168,7 @@ def mark_delivered(db: Session, conversation_id: str, message_id: str, user_id: 
             "user_id": user_id,
         }
         import asyncio
+
         asyncio.create_task(pubsub.publish(f"im:conv:{conversation_id}", payload))
     except Exception:
         pass
@@ -172,5 +184,3 @@ def list_receipts(db: Session, conversation_id: str, message_id: str):
         .all()
     )
     return items
-
-

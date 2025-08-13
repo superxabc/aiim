@@ -9,7 +9,9 @@ from ..core.events import publish_event_async
 from ..core.seq import next_seq
 
 
-def create_conversation(db: Session, req: im_model.ConversationCreateRequest) -> im_model.Conversation:
+def create_conversation(
+    db: Session, req: im_model.ConversationCreateRequest
+) -> im_model.Conversation:
     conversation = im_model.Conversation(
         type=req.type,
         name=req.name,
@@ -37,12 +39,15 @@ def list_conversations(db: Session, user_id: str | None) -> List[im_model.Conver
     if user_id:
         q = q.join(
             im_model.ConversationMember,
-            im_model.Conversation.conversation_id == im_model.ConversationMember.conversation_id,
+            im_model.Conversation.conversation_id
+            == im_model.ConversationMember.conversation_id,
         ).filter(im_model.ConversationMember.user_id == user_id)
     return q.order_by(im_model.Conversation.updated_at.desc()).all()
 
 
-def list_conversations_with_meta(db: Session, user_id: Optional[str]) -> List[im_model.Conversation]:
+def list_conversations_with_meta(
+    db: Session, user_id: Optional[str]
+) -> List[im_model.Conversation]:
     items = list_conversations(db, user_id)
     # 组装 last_message 与 unread_count（基于 seq 的简化计算）
     for conv in items:
@@ -96,6 +101,7 @@ def create_message(
     if seq_value is None:
         try:
             import asyncio
+
             loop = asyncio.get_event_loop()
             if loop.is_running():
                 # 运行中事件循环，避免阻塞；跳过，由上层传入 seq
@@ -121,7 +127,11 @@ def create_message(
     )
     db.add(msg)
 
-    conv = db.query(im_model.Conversation).filter(im_model.Conversation.conversation_id == req.conversation_id).first()
+    conv = (
+        db.query(im_model.Conversation)
+        .filter(im_model.Conversation.conversation_id == req.conversation_id)
+        .first()
+    )
     if conv:
         conv.updated_at = datetime.utcnow()
         if msg.seq is not None and (conv.last_seq or 0) < msg.seq:
@@ -164,6 +174,7 @@ def create_stream_chunk(
     if seq_value is None:
         try:
             import asyncio
+
             loop = asyncio.get_event_loop()
             if loop.is_running():
                 seq_value = None
@@ -189,7 +200,11 @@ def create_stream_chunk(
     )
     db.add(msg)
 
-    conv = db.query(im_model.Conversation).filter(im_model.Conversation.conversation_id == conversation_id).first()
+    conv = (
+        db.query(im_model.Conversation)
+        .filter(im_model.Conversation.conversation_id == conversation_id)
+        .first()
+    )
     if conv:
         conv.updated_at = datetime.utcnow()
         if msg.seq is not None and (conv.last_seq or 0) < msg.seq:
@@ -226,19 +241,28 @@ def list_messages(
     before_id: Optional[str] = None,
     after_seq: Optional[int] = None,
 ) -> List[im_model.IMMessage]:
-    q = db.query(im_model.IMMessage).filter(im_model.IMMessage.conversation_id == conversation_id)
+    q = db.query(im_model.IMMessage).filter(
+        im_model.IMMessage.conversation_id == conversation_id
+    )
     if before_id:
-        anchor = db.query(im_model.IMMessage).filter(im_model.IMMessage.message_id == before_id).first()
+        anchor = (
+            db.query(im_model.IMMessage)
+            .filter(im_model.IMMessage.message_id == before_id)
+            .first()
+        )
         if anchor:
             q = q.filter(im_model.IMMessage.created_at < anchor.created_at)
     if after_seq is not None:
-        q = q.filter(im_model.IMMessage.seq != None).filter(im_model.IMMessage.seq > after_seq)  # noqa: E711
+        q = q.filter(im_model.IMMessage.seq != None).filter(
+            im_model.IMMessage.seq > after_seq
+        )  # noqa: E711
     # 优先按 seq 排序，其次按 created_at
     if hasattr(im_model.IMMessage, "seq"):
-        q = q.order_by(im_model.IMMessage.seq.asc().nulls_last(), im_model.IMMessage.created_at.asc())
+        q = q.order_by(
+            im_model.IMMessage.seq.asc().nulls_last(),
+            im_model.IMMessage.created_at.asc(),
+        )
     else:
         q = q.order_by(im_model.IMMessage.created_at.asc())
     q = q.limit(limit)
     return q.all()
-
-

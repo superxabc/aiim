@@ -33,5 +33,3 @@ async def next_seq(conversation_id: str) -> int:
         current = _in_memory_seq.get(key, 0) + 1
         _in_memory_seq[key] = current
         return current
-
-
