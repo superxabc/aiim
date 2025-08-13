@@ -7,7 +7,7 @@ from app.core.metrics import add_metrics_middleware
 from app.core.ratelimit import RateLimitMiddleware
 from app.core.pubsub import pubsub
 from app.models.base import Base
-from app.models import im as im_model
+
 from app.api import im_api, im_ws
 from app.core.config import settings
 
