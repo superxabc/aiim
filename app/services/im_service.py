@@ -44,7 +44,7 @@ def list_conversations(db: Session, user_id: str | None) -> List[im_model.Conver
 
 def list_conversations_with_meta(db: Session, user_id: Optional[str]) -> List[im_model.Conversation]:
     items = list_conversations(db, user_id)
-    # 组装 last_message 与 unread_count（计算简单版）
+    # 组装 last_message 与 unread_count（基于 seq 的简化计算）
     for conv in items:
         last = (
             db.query(im_model.IMMessage)
@@ -62,32 +62,12 @@ def list_conversations_with_meta(db: Session, user_id: Optional[str]) -> List[im
                 )
                 .first()
             )
-            if member and member.last_read_message_id:
-                anchor = db.query(im_model.IMMessage).filter(im_model.IMMessage.message_id == member.last_read_message_id).first()
-                if anchor:
-                    cnt = (
-                        db.query(im_model.IMMessage)
-                        .filter(
-                            im_model.IMMessage.conversation_id == conv.conversation_id,
-                            im_model.IMMessage.created_at > anchor.created_at,
-                        )
-                        .count()
-                    )
-                    setattr(conv, "unread_count", cnt)
-                else:
-                    cnt = (
-                        db.query(im_model.IMMessage)
-                        .filter(im_model.IMMessage.conversation_id == conv.conversation_id)
-                        .count()
-                    )
-                    setattr(conv, "unread_count", cnt)
+            if member:
+                last_seq = conv.last_seq or 0
+                unread = max(0, int(last_seq) - int(member.last_read_seq or 0))
+                setattr(conv, "unread_count", unread)
             else:
-                cnt = (
-                    db.query(im_model.IMMessage)
-                    .filter(im_model.IMMessage.conversation_id == conv.conversation_id)
-                    .count()
-                )
-                setattr(conv, "unread_count", cnt)
+                setattr(conv, "unread_count", None)
         else:
             setattr(conv, "unread_count", None)
     return items
@@ -125,11 +105,13 @@ def create_message(
         except Exception:
             seq_value = None
 
+    # 统一存储内容为 JSON
+    payload_content = req.content
     msg = im_model.IMMessage(
         conversation_id=req.conversation_id,
         sender_id=sender_id or "unknown",
         type=req.type,
-        content=req.content,
+        content=payload_content,
         reply_to=req.reply_to,
         client_msg_id=req.client_msg_id,
         tenant_id=req.tenant_id,
@@ -190,16 +172,20 @@ def create_stream_chunk(
         except Exception:
             seq_value = None
 
+    # 流式消息扩展字段
     msg = im_model.IMMessage(
         conversation_id=conversation_id,
         sender_id=sender_id,
         type="stream_chunk",
-        content=content,
+        content={"chunk": content},
         client_msg_id=client_msg_id,
         tenant_id=tenant_id,
         created_at=datetime.utcnow(),
         seq=seq_value,
         status="sent",
+        stream_id=client_msg_id,
+        chunk_index=(0 if not client_msg_id else None),
+        is_end=bool(stream_end),
     )
     db.add(msg)
 

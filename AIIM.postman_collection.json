@@ -1,0 +1,254 @@
+{
+  "info": {
+    "name": "AIIM API Collection",
+    "description": "AIIM (AI Instant Messaging) 服务API测试集合",
+    "version": "1.0.0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{jwt_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8083",
+      "type": "string"
+    },
+    {
+      "key": "jwt_token",
+      "value": "your_jwt_token_here",
+      "type": "string"
+    },
+    {
+      "key": "conversation_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "message_id",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/health",
+          "host": ["{{base_url}}"],
+          "path": ["health"]
+        }
+      }
+    },
+    {
+      "name": "Metrics",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/metrics",
+          "host": ["{{base_url}}"],
+          "path": ["metrics"]
+        }
+      }
+    },
+    {
+      "name": "Conversations",
+      "item": [
+        {
+          "name": "Create Conversation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('conversation_id', response.conversation_id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"direct\",\n  \"name\": \"Test Conversation\",\n  \"member_ids\": [\"user1\", \"user2\"]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/aiim/conversations",
+              "host": ["{{base_url}}"],
+              "path": ["api", "aiim", "conversations"]
+            }
+          }
+        },
+        {
+          "name": "List Conversations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/aiim/conversations",
+              "host": ["{{base_url}}"],
+              "path": ["api", "aiim", "conversations"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Messages",
+      "item": [
+        {
+          "name": "Send Message",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('message_id', response.message.message_id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"conversation_id\": \"{{conversation_id}}\",\n  \"type\": \"text\",\n  \"content\": \"Hello, this is a test message!\",\n  \"client_msg_id\": \"{{$guid}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/aiim/messages",
+              "host": ["{{base_url}}"],
+              "path": ["api", "aiim", "messages"]
+            }
+          }
+        },
+        {
+          "name": "List Messages",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/aiim/messages/{{conversation_id}}?limit=50",
+              "host": ["{{base_url}}"],
+              "path": ["api", "aiim", "messages", "{{conversation_id}}"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Send Stream Chunk",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"conversation_id\": \"{{conversation_id}}\",\n  \"chunk\": \"This is a streaming chunk\",\n  \"stream_end\": false,\n  \"client_msg_id\": \"{{$guid}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/aiim/messages/stream",
+              "host": ["{{base_url}}"],
+              "path": ["api", "aiim", "messages", "stream"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Receipts",
+      "item": [
+        {
+          "name": "Mark Delivered",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"conversation_id\": \"{{conversation_id}}\",\n  \"message_id\": \"{{message_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/aiim/receipts/delivered",
+              "host": ["{{base_url}}"],
+              "path": ["api", "aiim", "receipts", "delivered"]
+            }
+          }
+        },
+        {
+          "name": "Mark Read",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"user1\",\n  \"conversation_id\": \"{{conversation_id}}\",\n  \"last_read_seq\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/aiim/receipts/read",
+              "host": ["{{base_url}}"],
+              "path": ["api", "aiim", "receipts", "read"]
+            }
+          }
+        },
+        {
+          "name": "Get Receipts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/aiim/receipts/{{conversation_id}}/{{message_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "aiim", "receipts", "{{conversation_id}}", "{{message_id}}"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

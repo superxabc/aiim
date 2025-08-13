@@ -26,7 +26,6 @@ async def im_gateway(websocket: WebSocket):
     await websocket.accept()
     # 在线路由登记（Redis可用时）
     try:
-        import json
         info = {"instance_id": settings.INSTANCE_ID, "platform": "ws", "last_ping_ts": 0}
         if hasattr(pubsub, "set_connection"):
             await pubsub.set_connection(user_id, json.dumps(info), ttl_sec=60)  # type: ignore
@@ -102,7 +101,6 @@ async def im_gateway(websocket: WebSocket):
                 last_pong = asyncio.get_event_loop().time()
                 # 续期路由信息
                 try:
-                    import json
                     info = {"instance_id": settings.INSTANCE_ID, "platform": "ws", "last_ping_ts": int(last_pong)}
                     if hasattr(pubsub, "set_connection"):
                         await pubsub.set_connection(user_id, json.dumps(info), ttl_sec=60)  # type: ignore
@@ -124,6 +122,23 @@ async def im_gateway(websocket: WebSocket):
                         db = SessionLocal()
                         # 先生成 seq（在事件循环中）
                         seq_value = await next_seq(conv_id)
+                        # 幂等：如带 client_msg_id 则先查
+                        existing = None
+                        if data.get("client_msg_id"):
+                            existing = (
+                                db.query(im_model.IMMessage)
+                                .filter(
+                                    im_model.IMMessage.conversation_id == conv_id,
+                                    im_model.IMMessage.sender_id == user_id,
+                                    im_model.IMMessage.client_msg_id == data.get("client_msg_id"),
+                                )
+                                .first()
+                            )
+                        if existing:
+                            await websocket.send_text(
+                                json.dumps({"type": "ack", "event": "message.sent", "message_id": existing.message_id, "seq": existing.seq})
+                            )
+                            continue
                         req = im_model.MessageCreateRequest(
                             conversation_id=conv_id,
                             type=msg_type,
@@ -176,7 +191,6 @@ async def im_gateway(websocket: WebSocket):
                         except Exception:
                             pass
                 elif t == "delivered":
-                    # 送达回执（最小实现：仅广播事件，不落库为 delivered）
                     conv_id = data.get("conversation_id")
                     message_id = data.get("message_id")
                     if conv_id and message_id:
@@ -184,7 +198,8 @@ async def im_gateway(websocket: WebSocket):
                         from app.services.receipts_service import mark_delivered
                         db = SessionLocal()
                         try:
-                            mark_delivered(db, conv_id, message_id)
+                            # per-user delivered（校验成员在 service 内/或下层 API 负责）
+                            mark_delivered(db, conv_id, message_id, user_id)
                         finally:
                             try:
                                 db.close()

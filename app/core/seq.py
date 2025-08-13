@@ -26,7 +26,9 @@ async def next_seq(conversation_id: str) -> int:
             return int(await _redis_client.incr(key))
         except Exception:
             pass
-    # Fallback: in-memory per-process
+    # Fallback: in-memory per-process（仅当不强制 Redis 时，否则抛错）
+    if settings.REQUIRE_REDIS:
+        raise RuntimeError("Redis is required for seq generation in production")
     async with _lock:
         current = _in_memory_seq.get(key, 0) + 1
         _in_memory_seq[key] = current

@@ -6,7 +6,6 @@ from app.models import im as im_model
 from app.services import im_service
 from app.services import receipts_service
 from app.core.ws_auth import get_current_user_id_from_request
-from app.models import im as im_model
 
 
 router = APIRouter()
@@ -56,6 +55,19 @@ async def create_message(
         # 生成 seq（在事件循环中）
         from app.core.seq import next_seq
         seq_value = await next_seq(req.conversation_id)
+        # 幂等：若携带 client_msg_id，先检查是否已存在
+        if req.client_msg_id:
+            exists = (
+                db.query(im_model.IMMessage)
+                .filter(
+                    im_model.IMMessage.conversation_id == req.conversation_id,
+                    im_model.IMMessage.sender_id == user_id,
+                    im_model.IMMessage.client_msg_id == req.client_msg_id,
+                )
+                .first()
+            )
+            if exists:
+                return {"message": exists}
         msg = im_service.create_message(db, req, sender_id=user_id, seq_value=seq_value)
         return {"message": msg}
     except HTTPException:
@@ -154,9 +166,20 @@ def mark_delivered(
     message_id = body.get("message_id")
     if not conv_id or not message_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="invalid payload")
-    # 更新持久化状态并广播
+    # 成员校验（发送 delivered 的必须是会话成员）
+    member = (
+        db.query(im_model.ConversationMember)
+        .filter(
+            im_model.ConversationMember.conversation_id == conv_id,
+            im_model.ConversationMember.user_id == user_id,
+        )
+        .first()
+    )
+    if not member:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+    # 更新持久化状态并广播（per-user receipts）
     from app.services.receipts_service import mark_delivered as svc_mark_delivered
-    svc_mark_delivered(db, conv_id, message_id)
+    svc_mark_delivered(db, conv_id, message_id, user_id)
     return
 
 
@@ -171,5 +194,41 @@ def mark_read(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token")
     receipts_service.mark_read(db, req)
     return
+
+
+@router.get("/receipts/{conversation_id}/{message_id}")
+def get_receipts(
+    conversation_id: str,
+    message_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    user_id = get_current_user_id_from_request(request)
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token")
+    # 仅会话成员可查看
+    member = (
+        db.query(im_model.ConversationMember)
+        .filter(
+            im_model.ConversationMember.conversation_id == conversation_id,
+            im_model.ConversationMember.user_id == user_id,
+        )
+        .first()
+    )
+    if not member:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+    items = receipts_service.list_receipts(db, conversation_id, message_id)
+    return {
+        "conversation_id": conversation_id,
+        "message_id": message_id,
+        "receipts": [
+            {
+                "user_id": r.user_id,
+                "delivered_at": r.delivered_at.isoformat() if r.delivered_at else None,
+                "read_at": r.read_at.isoformat() if r.read_at else None,
+            }
+            for r in items
+        ],
+    }
 
 

@@ -1,8 +1,8 @@
 import uuid
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Any
 
-from sqlalchemy import Column, String, DateTime, ForeignKey, Enum, Boolean, Text, BigInteger, Index
+from sqlalchemy import Column, String, DateTime, ForeignKey, Enum, Boolean, BigInteger, Index, JSON, Integer, UniqueConstraint
 from sqlalchemy.orm import relationship
 from pydantic import BaseModel, Field
 
@@ -31,6 +31,7 @@ class ConversationMember(Base):
     role = Column(Enum("owner", "member", "assistant", name="conversation_member_role"), nullable=False, default="member")
     joined_at = Column(DateTime, default=datetime.utcnow)
     last_read_message_id = Column(String, nullable=True)
+    last_read_seq = Column(BigInteger, default=0)
     muted = Column(Boolean, default=False)
     tenant_id = Column(String, nullable=True, index=True)
 
@@ -43,7 +44,7 @@ class IMMessage(Base):
     conversation_id = Column(String, ForeignKey("conversations.conversation_id"), nullable=False, index=True)
     sender_id = Column(String, nullable=False, index=True)
     type = Column(Enum("text", "image", "file", "audio", "video", "system", "ai", "stream_chunk", name="message_type"), nullable=False, default="text")
-    content = Column(Text, nullable=False)
+    content = Column(JSON, nullable=False)
     reply_to = Column(String, nullable=True)
     client_msg_id = Column(String, nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
@@ -51,10 +52,32 @@ class IMMessage(Base):
     edited_at = Column(DateTime, nullable=True)
     status = Column(Enum("sent", "delivered", "read", name="message_status"), nullable=False, default="sent")
     tenant_id = Column(String, nullable=True, index=True)
+    # 流式消息字段（可选）
+    stream_id = Column(String, nullable=True, index=True)
+    chunk_index = Column(Integer, nullable=True)
+    is_end = Column(Boolean, default=False)
 
     conversation = relationship("Conversation", back_populates="messages")
 
 Index("idx_messages_conv_seq", IMMessage.conversation_id, IMMessage.seq)
+IMMessage.__table_args__ = (
+    UniqueConstraint("conversation_id", "sender_id", "client_msg_id", name="uq_msg_idempotent"),
+)
+
+
+class MessageReceipt(Base):
+    __tablename__ = "message_receipts"
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    message_id = Column(String, ForeignKey("im_messages.message_id"), nullable=False, index=True)
+    conversation_id = Column(String, ForeignKey("conversations.conversation_id"), nullable=False, index=True)
+    user_id = Column(String, nullable=False, index=True)
+    delivered_at = Column(DateTime, nullable=True)
+    read_at = Column(DateTime, nullable=True)
+    tenant_id = Column(String, nullable=True, index=True)
+
+    __table_args__ = (
+        UniqueConstraint("message_id", "user_id", name="uq_receipt_msg_user"),
+    )
 
 
 class ConversationCreateRequest(BaseModel):
@@ -84,7 +107,7 @@ class ConversationListResponse(BaseModel):
 class MessageCreateRequest(BaseModel):
     conversation_id: str
     type: str = Field("text", pattern="^(text|image|audio|video|system|ai)$")
-    content: str
+    content: Any
     reply_to: Optional[str] = None
     client_msg_id: Optional[str] = None
     tenant_id: Optional[str] = None
@@ -94,7 +117,7 @@ class MessageInList(BaseModel):
     message_id: str
     sender_id: str
     type: str
-    content: str
+    content: Any
     created_at: datetime
     seq: int | None = None
     reply_to: Optional[str] = None

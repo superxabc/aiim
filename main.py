@@ -9,18 +9,19 @@ from app.core.pubsub import pubsub
 from app.models.base import Base
 from app.models import im as im_model
 from app.api import im_api, im_ws
+from app.core.config import settings
 
 
-app = FastAPI(title="IM Platform", version="0.1.0")
+app = FastAPI(title="aiim", version="0.1.0")
 
 add_metrics_middleware(app)
 app.add_middleware(RateLimitMiddleware)
 
-# 临时：开发期自动建表（生产请改为 Alembic 迁移）
-Base.metadata.create_all(bind=engine)
+if settings.DEV_AUTO_CREATE_TABLES:
+    Base.metadata.create_all(bind=engine)
 
-app.include_router(im_api.router, prefix="/api/im", tags=["IM社交"])
-app.include_router(im_ws.router, prefix="/api/im", tags=["IM实时"])
+app.include_router(im_api.router, prefix="/api/aiim", tags=["AIIM社交"])
+app.include_router(im_ws.router, prefix="/api/aiim", tags=["AIIM实时"])
 
 
 @app.get("/")
@@ -30,7 +31,16 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    # 简单依赖健康检查：Redis 可选但在 REQUIRE_REDIS=True 时必须可用
+    dep: dict = {"redis": False}
+    try:
+        if settings.REQUIRE_REDIS:
+            from app.core.seq import _redis_client  # type: ignore
+            dep["redis"] = _redis_client is not None
+    except Exception:
+        dep["redis"] = False
+    status = "ok" if (not settings.REQUIRE_REDIS or dep["redis"]) else "degraded"
+    return {"status": status, "dependencies": dep}
 
 
 @app.get("/metrics")
