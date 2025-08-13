@@ -253,9 +253,9 @@ def list_messages(
         if anchor:
             q = q.filter(im_model.IMMessage.created_at < anchor.created_at)
     if after_seq is not None:
-        q = q.filter(im_model.IMMessage.seq != None).filter(
+        q = q.filter(im_model.IMMessage.seq.is_not(None)).filter(
             im_model.IMMessage.seq > after_seq
-        )  # noqa: E711
+        )
     # 优先按 seq 排序，其次按 created_at
     if hasattr(im_model.IMMessage, "seq"):
         q = q.order_by(
