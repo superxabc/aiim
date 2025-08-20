@@ -48,7 +48,7 @@ def get_current_user_id_from_request(request: Request) -> Optional[str]:
     if not token:
         token = request.query_params.get("token")
     if not token:
-        print(f"JWT Debug: No token found in request")
+        print("JWT Debug: No token found in request")
         return None
     try:
         payload = jwt.decode(

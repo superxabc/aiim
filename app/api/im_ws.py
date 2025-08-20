@@ -268,90 +268,116 @@ async def im_gateway(websocket: WebSocket):
                         try:
                             from app.core.database import SessionLocal
                             from app.services.call_service import CallManagementService
-                            
+
                             db = SessionLocal()
                             try:
                                 # 创建通话
                                 call = CallManagementService.create_call(
-                                    db=db,
-                                    conversation_id=conv_id,
-                                    initiator_id=user_id
+                                    db=db, conversation_id=conv_id, initiator_id=user_id
                                 )
-                                
+
                                 # 获取ICE配置
-                                ice_config = CallManagementService.get_ice_configuration(user_id)
-                                
+                                ice_config = (
+                                    CallManagementService.get_ice_configuration(user_id)
+                                )
+
                                 # 向发起者发送确认
-                                await websocket.send_text(json.dumps({
-                                    "type": "call.initiated",
-                                    "call_id": call.call_id,
-                                    "ice_configuration": ice_config
-                                }))
-                                
+                                await websocket.send_text(
+                                    json.dumps(
+                                        {
+                                            "type": "call.initiated",
+                                            "call_id": call.call_id,
+                                            "ice_configuration": ice_config,
+                                        }
+                                    )
+                                )
+
                                 # 向目标用户发送邀请
                                 invite_data = {
                                     "type": "call.incoming",
                                     "call_id": call.call_id,
                                     "from_user_id": user_id,
                                     "conversation_id": conv_id,
-                                    "ice_configuration": CallManagementService.get_ice_configuration(to_user_id)
+                                    "ice_configuration": CallManagementService.get_ice_configuration(
+                                        to_user_id
+                                    ),
                                 }
                                 await pubsub.publish(f"im:conv:{conv_id}", invite_data)
-                                
+
                             finally:
                                 db.close()
                         except Exception as e:
-                            await websocket.send_text(json.dumps({
-                                "type": "error",
-                                "message": f"Failed to initiate call: {str(e)}"
-                            }))
-                
+                            await websocket.send_text(
+                                json.dumps(
+                                    {
+                                        "type": "error",
+                                        "message": f"Failed to initiate call: {str(e)}",
+                                    }
+                                )
+                            )
+
                 elif t == "call.accept":
                     call_id = data.get("call_id")
                     if call_id:
                         try:
                             from app.core.database import SessionLocal
                             from app.services.call_service import CallManagementService
-                            
+
                             db = SessionLocal()
                             try:
-                                success = CallManagementService.join_call(db, call_id, user_id)
+                                success = CallManagementService.join_call(
+                                    db, call_id, user_id
+                                )
                                 if success:
                                     # 获取通话信息
                                     from app.models import im as im_model
-                                    call = db.query(im_model.CallLog).filter(
-                                        im_model.CallLog.call_id == call_id
-                                    ).first()
-                                    
+
+                                    call = (
+                                        db.query(im_model.CallLog)
+                                        .filter(im_model.CallLog.call_id == call_id)
+                                        .first()
+                                    )
+
                                     if call:
                                         # 向会话广播接听事件
                                         accept_data = {
                                             "type": "call.accepted",
                                             "call_id": call_id,
                                             "user_id": user_id,
-                                            "conversation_id": call.conversation_id
+                                            "conversation_id": call.conversation_id,
                                         }
-                                        await pubsub.publish(f"im:conv:{call.conversation_id}", accept_data)
+                                        await pubsub.publish(
+                                            f"im:conv:{call.conversation_id}",
+                                            accept_data,
+                                        )
                                 else:
-                                    await websocket.send_text(json.dumps({
-                                        "type": "error",
-                                        "message": "Failed to accept call"
-                                    }))
+                                    await websocket.send_text(
+                                        json.dumps(
+                                            {
+                                                "type": "error",
+                                                "message": "Failed to accept call",
+                                            }
+                                        )
+                                    )
                             finally:
                                 db.close()
                         except Exception as e:
-                            await websocket.send_text(json.dumps({
-                                "type": "error",
-                                "message": f"Failed to accept call: {str(e)}"
-                            }))
-                
+                            await websocket.send_text(
+                                json.dumps(
+                                    {
+                                        "type": "error",
+                                        "message": f"Failed to accept call: {str(e)}",
+                                    }
+                                )
+                            )
+
                 elif t == "call.hangup":
                     call_id = data.get("call_id")
                     if call_id:
                         try:
                             from app.core.database import SessionLocal
                             from app.services.call_service import CallManagementService
-                            
+
                             db = SessionLocal()
                             try:
                                 CallManagementService.leave_call(db, call_id, user_id)
@@ -359,57 +385,76 @@ async def im_gateway(websocket: WebSocket):
                             finally:
                                 db.close()
                         except Exception as e:
-                            await websocket.send_text(json.dumps({
-                                "type": "error",
-                                "message": f"Failed to hangup call: {str(e)}"
-                            }))
-                
+                            await websocket.send_text(
+                                json.dumps(
+                                    {
+                                        "type": "error",
+                                        "message": f"Failed to hangup call: {str(e)}",
+                                    }
+                                )
+                            )
+
                 elif t == "call.webrtc.signal":
                     call_id = data.get("call_id")
                     to_user_id = data.get("to_user_id")
                     payload = data.get("payload")
-                    
+
                     if call_id and to_user_id and payload:
                         try:
                             from app.services.call_service import WebRTCSignalingService
-                            
+
                             # 验证信令格式
-                            sanitized_payload = WebRTCSignalingService.sanitize_webrtc_signal(payload)
+                            sanitized_payload = (
+                                WebRTCSignalingService.sanitize_webrtc_signal(payload)
+                            )
                             if sanitized_payload:
                                 # 转发信令给目标用户
                                 signal_data = {
                                     "type": "call.webrtc.signal",
                                     "call_id": call_id,
                                     "from_user_id": user_id,
-                                    "payload": sanitized_payload
+                                    "payload": sanitized_payload,
                                 }
-                                
+
                                 # 这里可以直接向特定用户发送，或通过会话频道广播
                                 # 为简化实现，通过会话频道广播，客户端根据to_user_id过滤
                                 from app.core.database import SessionLocal
                                 from app.models import im as im_model
-                                
+
                                 db = SessionLocal()
                                 try:
-                                    call = db.query(im_model.CallLog).filter(
-                                        im_model.CallLog.call_id == call_id
-                                    ).first()
+                                    call = (
+                                        db.query(im_model.CallLog)
+                                        .filter(im_model.CallLog.call_id == call_id)
+                                        .first()
+                                    )
                                     if call:
                                         signal_data["to_user_id"] = to_user_id
-                                        await pubsub.publish(f"im:conv:{call.conversation_id}", signal_data)
+                                        await pubsub.publish(
+                                            f"im:conv:{call.conversation_id}",
+                                            signal_data,
+                                        )
                                 finally:
                                     db.close()
                             else:
-                                await websocket.send_text(json.dumps({
-                                    "type": "error",
-                                    "message": "Invalid WebRTC signal format"
-                                }))
+                                await websocket.send_text(
+                                    json.dumps(
+                                        {
+                                            "type": "error",
+                                            "message": "Invalid WebRTC signal format",
+                                        }
+                                    )
+                                )
                         except Exception as e:
-                            await websocket.send_text(json.dumps({
-                                "type": "error",
-                                "message": f"Failed to relay WebRTC signal: {str(e)}"
-                            }))
-                
+                            await websocket.send_text(
+                                json.dumps(
+                                    {
+                                        "type": "error",
+                                        "message": f"Failed to relay WebRTC signal: {str(e)}",
+                                    }
+                                )
+                            )
+
                 else:
                     conv_id = data.get("conversation_id")
                     if conv_id:

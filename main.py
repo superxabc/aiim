@@ -13,7 +13,10 @@ from app.core.pubsub import pubsub
 from app.models.base import Base
 from app.core.security import SecurityHeaders
 from app.core.monitoring import (
-    HealthChecker, MetricsCollector, performance_monitor, LoggingConfig
+    HealthChecker,
+    MetricsCollector,
+    performance_monitor,
+    LoggingConfig,
 )
 
 from app.api import im_api, im_ws, media_api, call_api
@@ -33,10 +36,10 @@ if settings.DEV_AUTO_CREATE_TABLES:
 
 app = FastAPI(
     title="AIIM - AI-Powered Instant Messaging",
-    version=getattr(settings, 'VERSION', '1.0.0'),
+    version=getattr(settings, "VERSION", "1.0.0"),
     description="企业级即时通讯系统，支持音视频通话",
-    docs_url="/docs" if getattr(settings, 'LOG_LEVEL', 'INFO') == "DEBUG" else None,
-    redoc_url="/redoc" if getattr(settings, 'LOG_LEVEL', 'INFO') == "DEBUG" else None
+    docs_url="/docs" if getattr(settings, "LOG_LEVEL", "INFO") == "DEBUG" else None,
+    redoc_url="/redoc" if getattr(settings, "LOG_LEVEL", "INFO") == "DEBUG" else None,
 )
 
 # 中间件顺序很重要！
@@ -47,8 +50,11 @@ except Exception as e:
     logger.warning(f"Failed to add security middleware: {e}")
 
 # 2. CORS中间件
-if getattr(settings, 'ENABLE_CORS', False):
-    origins = [origin.strip() for origin in getattr(settings, 'ALLOWED_ORIGINS', '*').split(",")]
+if getattr(settings, "ENABLE_CORS", False):
+    origins = [
+        origin.strip()
+        for origin in getattr(settings, "ALLOWED_ORIGINS", "*").split(",")
+    ]
     app.add_middleware(
         CORSMiddleware,
         allow_origins=origins,
@@ -57,28 +63,29 @@ if getattr(settings, 'ENABLE_CORS', False):
         allow_headers=["Authorization", "Content-Type", "X-API-Key"],
     )
 
+
 # 3. 性能监控中间件
 @app.middleware("http")
 async def performance_middleware(request: Request, call_next):
     start_time = time.time()
-    
+
     try:
         # 处理请求
         response = await call_next(request)
-        
+
         # 计算响应时间
         process_time = time.time() - start_time
-        
+
         # 记录指标
         try:
             MetricsCollector.record_request(request, process_time, response.status_code)
             performance_monitor.record_request_time(process_time)
         except Exception:
             pass  # 不让监控失败影响正常请求
-        
+
         # 添加响应头
         response.headers["X-Process-Time"] = str(process_time)
-        
+
         return response
     except Exception as e:
         process_time = time.time() - start_time
@@ -89,9 +96,11 @@ async def performance_middleware(request: Request, call_next):
             pass
         raise
 
+
 # 4. 速率限制和指标中间件
 app.add_middleware(RateLimitMiddleware)
 add_metrics_middleware(app)
+
 
 # 健康检查端点
 @app.get("/health")
@@ -107,17 +116,20 @@ async def health():
         try:
             if settings.REQUIRE_REDIS:
                 from app.core.seq import _redis_client  # type: ignore
+
                 dep["redis"] = _redis_client is not None
         except Exception:
             dep["redis"] = False
         status = "ok" if (not settings.REQUIRE_REDIS or dep["redis"]) else "degraded"
         return {"status": status, "dependencies": dep}
 
+
 # 简单健康检查
 @app.get("/healthz")
 async def simple_health_check():
     """简单健康检查（K8s风格）"""
     return {"status": "ok"}
+
 
 # 准备就绪检查
 @app.get("/ready")
@@ -131,29 +143,31 @@ async def readiness_check():
     except Exception:
         return Response(status_code=503, content="Service not ready")
 
+
 # Prometheus指标端点
 @app.get("/metrics")
 async def metrics():
     """Prometheus指标端点"""
     try:
         return PlainTextResponse(
-            MetricsCollector.get_metrics(),
-            media_type=CONTENT_TYPE_LATEST
+            MetricsCollector.get_metrics(), media_type=CONTENT_TYPE_LATEST
         )
     except Exception:
         # 降级到基本指标
         return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
+
 # 性能统计端点 (调试用)
 @app.get("/stats")
 async def performance_stats():
     """性能统计端点"""
-    if getattr(settings, 'LOG_LEVEL', 'INFO') != "DEBUG":
+    if getattr(settings, "LOG_LEVEL", "INFO") != "DEBUG":
         return {"message": "Stats endpoint disabled in production"}
     try:
         return performance_monitor.get_stats()
     except Exception as e:
         return {"error": str(e)}
+
 
 # API路由
 app.include_router(im_api.router, prefix="/api/aiim", tags=["AIIM社交"])
@@ -161,16 +175,20 @@ app.include_router(im_ws.router, prefix="/api/aiim", tags=["AIIM实时"])
 app.include_router(media_api.router, prefix="/api/aiim/media", tags=["AIIM媒体"])
 app.include_router(call_api.router, prefix="/api/aiim/calls", tags=["AIIM通话"])
 
+
 # 根路径
 @app.get("/")
 def root():
     """根路径信息"""
     return {
         "service": "AIIM",
-        "version": getattr(settings, 'VERSION', '1.0.0'),
+        "version": getattr(settings, "VERSION", "1.0.0"),
         "status": "running",
-        "docs": "/docs" if getattr(settings, 'LOG_LEVEL', 'INFO') == "DEBUG" else "disabled"
+        "docs": (
+            "/docs" if getattr(settings, "LOG_LEVEL", "INFO") == "DEBUG" else "disabled"
+        ),
     }
+
 
 # 事件处理
 @app.on_event("shutdown")

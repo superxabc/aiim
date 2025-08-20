@@ -174,7 +174,9 @@ class CallLog(Base):
 class CallParticipant(Base):
     __tablename__ = "call_participants"
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    call_id = Column(String, ForeignKey("call_logs.call_id"), nullable=False, index=True)
+    call_id = Column(
+        String, ForeignKey("call_logs.call_id"), nullable=False, index=True
+    )
     user_id = Column(String, nullable=False, index=True)
     join_time = Column(DateTime, default=datetime.utcnow)
     leave_time = Column(DateTime, nullable=True)
@@ -244,7 +246,7 @@ class UploadTokenRequest(BaseModel):
     conversation_id: str
     filename: str
     content_type: str
-    file_size: int = Field(..., gt=0, le=50*1024*1024)  # 最大50MB
+    file_size: int = Field(..., gt=0, le=50 * 1024 * 1024)  # 最大50MB
 
 
 class UploadTokenResponse(BaseModel):
