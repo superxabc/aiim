@@ -5,18 +5,28 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.111.0-green.svg)](https://fastapi.tiangolo.com/)
 [![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=flat&logo=docker&logoColor=white)](https://www.docker.com/)
 
-AIIM是一个轻量级、高性能的即时消息服务，专为AI应用场景设计。基于FastAPI + SQLAlchemy + Redis构建，支持实时消息传递、AI流式消息处理和多端同步。
+AIIM v2.0是一个企业级即时通讯系统，专为AI应用场景设计。基于FastAPI + SQLAlchemy + Redis构建，支持实时消息传递、音视频通话、AI流式消息处理和多端同步。
 
 ## ✨ 核心特性
 
+### 基础IM功能
 - 🚀 **实时通信**: WebSocket双向通信，支持订阅/发布模式
 - 🔄 **消息顺序**: 基于Redis的严格消息序列保证
 - 📱 **多端同步**: 支持多设备消息同步和状态管理
 - 🤖 **AI集成**: 原生支持AI流式消息处理
 - 📊 **送达回执**: 完整的消息状态跟踪（已发送/已送达/已读）
+
+### 音视频功能 (v2.0新增)
+- 🎵 **语音消息**: 异步语音消息录制、上传、播放
+- 📞 **实时通话**: WebRTC音视频通话支持
+- 📁 **媒体存储**: 集成MinIO/阿里云OSS对象存储
+- 🌐 **NAT穿越**: 内置STUN/TURN服务器支持
+
+### 企业级特性
 - 🔍 **可观测性**: 内置健康检查、Prometheus指标监控
-- 🔐 **安全认证**: JWT认证，支持租户隔离
-- 📈 **高可用**: 支持水平扩展，生产就绪
+- 🔐 **安全认证**: 多层认证（JWT、API Key、内容验证）
+- 🛡️ **安全加固**: 速率限制、安全头、防攻击机制
+- 📈 **高可用**: 支持分布式部署、水平扩展、生产就绪
 
 ## 🚀 快速开始
 
@@ -80,27 +90,53 @@ cd ../deployment-scripts
 | `JWT_SECRET` | JWT签名密钥 | - | ✅ |
 | `DATABASE_URL` | 数据库连接URL | `sqlite:///./im.db` | ❌ |
 | `REDIS_URL` | Redis连接URL | - | 生产环境必填 |
+| `MINIO_ENDPOINT` | 对象存储端点 | `localhost:9000` | 音视频功能必填 |
+| `MINIO_ACCESS_KEY` | 对象存储访问密钥 | - | 音视频功能必填 |
+| `STUN_SERVERS` | STUN服务器列表 | Google公共STUN | ❌ |
+| `TURN_SERVER` | TURN服务器地址 | - | WebRTC通话推荐 |
 | `RATE_LIMIT_PER_SEC` | 速率限制（请求/秒） | `10` | ❌ |
-| `REQUIRE_REDIS` | 强制要求Redis | `false` | ❌ |
 
 完整配置请参考 `env.example` 文件。
 
-## API 摘要
+## 📋 API概览
 
-- REST（需 Authorization: Bearer <JWT>）
-  - POST `/api/aiim/conversations`
-  - GET `/api/aiim/conversations`
-  - POST `/api/aiim/messages`
-  - GET `/api/aiim/messages/{conversation_id}?limit&before_id&after_seq`
-  - POST `/api/aiim/messages/stream`（流式分片）
-  - POST `/api/aiim/receipts/delivered`、POST `/api/aiim/receipts/read`
+### REST API（需 Authorization: Bearer <JWT>）
 
-- WebSocket `/api/aiim/ws?token=<JWT>`
-  - `subscribe`/`unsubscribe`
-  - `send_msg` → ack `{message_id, seq}`，同时推送 `message.created`
-  - `stream_chunk` → ack `{message_id, seq, stream_end}`，推送 `message.stream_chunk`
-  - `delivered`（送达回执）
-  - `ping/pong`（心跳 + 在线路由续期）
+**基础IM功能:**
+- `POST /api/aiim/conversations` - 创建会话
+- `GET /api/aiim/conversations` - 获取会话列表
+- `POST /api/aiim/messages` - 发送消息（支持文本、音频等）
+- `GET /api/aiim/messages/{conversation_id}` - 获取消息历史
+- `POST /api/aiim/messages/stream` - 流式消息发送
+
+**媒体功能 (v2.0):**
+- `POST /api/aiim/media/upload_token` - 获取媒体上传令牌
+- `POST /api/aiim/media/upload_complete` - 完成媒体上传
+- `GET /api/aiim/media/{media_id}/download` - 下载媒体文件
+- `GET /api/aiim/media/{media_id}/metadata` - 获取媒体元数据
+
+**通话功能 (v2.0):**
+- `POST /api/aiim/calls/initiate` - 发起通话
+- `POST /api/aiim/calls/{call_id}/accept` - 接受通话
+- `POST /api/aiim/calls/{call_id}/reject` - 拒绝通话
+- `POST /api/aiim/calls/{call_id}/hangup` - 挂断通话
+- `GET /api/aiim/calls/ice-configuration` - 获取WebRTC配置
+
+### WebSocket `/api/aiim/ws?token=<JWT>`
+
+**消息功能:**
+- `subscribe`/`unsubscribe` - 订阅/取消订阅会话
+- `send_msg` → 消息发送确认 + `message.created` 事件
+- `stream_chunk` → 流式消息片段 + `message.stream_chunk` 事件
+- `delivered` - 消息送达回执
+
+**通话功能 (v2.0):**
+- `call.initiate` - 发起通话信令
+- `call.webrtc.signal` - WebRTC信令交换
+- `call.accept`/`call.reject`/`call.hangup` - 通话控制
+
+**系统功能:**
+- `ping`/`pong` - 心跳保活 + 在线状态维护
 
 ## 🏗️ 技术架构
 
@@ -130,12 +166,25 @@ cd ../deployment-scripts
 
 ### 核心组件
 
+**应用框架:**
 - **FastAPI**: 异步Web框架，提供REST API和WebSocket支持
 - **SQLAlchemy**: ORM框架，支持PostgreSQL和SQLite
-- **Redis**: 消息队列、序列生成、在线状态管理
 - **Alembic**: 数据库迁移工具
-- **Prometheus**: 指标监控
-- **JWT**: 身份认证
+
+**存储与缓存:**
+- **PostgreSQL**: 主数据库，存储消息、会话、通话记录
+- **Redis**: 消息队列、序列生成、在线状态管理
+- **MinIO/阿里云OSS**: 对象存储，用于媒体文件
+
+**通信与安全:**
+- **WebRTC**: 实时音视频通话技术
+- **coturn**: STUN/TURN服务器，NAT穿越
+- **JWT**: 身份认证和授权
+
+**监控与运维:**
+- **Prometheus**: 指标监控和告警
+- **Nginx**: 反向代理和负载均衡
+- **Docker**: 容器化部署
 
 ### 项目结构
 
@@ -143,12 +192,24 @@ cd ../deployment-scripts
 aiim/
 ├── app/
 │   ├── api/           # API路由层
-│   ├── core/          # 核心功能（认证、序列、事件等）
+│   │   ├── im_api.py      # 基础IM接口
+│   │   ├── im_ws.py       # WebSocket实时通信
+│   │   ├── media_api.py   # 媒体文件接口 (NEW)
+│   │   └── call_api.py    # 通话管理接口 (NEW)
+│   ├── core/          # 核心功能
+│   │   ├── config.py          # 配置管理
+│   │   ├── media_storage.py   # 媒体存储服务 (NEW)
+│   │   ├── turn_service.py    # TURN服务集成 (NEW)
+│   │   ├── security.py        # 安全中间件 (NEW)
+│   │   └── monitoring.py      # 监控系统 (NEW)
 │   ├── models/        # 数据模型
+│   │   └── im.py          # 扩展支持音视频消息
 │   └── services/      # 业务逻辑层
+│       └── call_service.py    # 通话管理服务 (NEW)
 ├── alembic/           # 数据库迁移
-├── tests/             # 测试用例
-└── docker-compose.yml # 容器编排
+├── docker-compose.yml         # 开发环境
+├── docker-compose.prod.yml    # 生产环境基础配置
+└── env.production.example     # 生产环境配置模板 (NEW)
 ```
 
 ## 📚 API文档
@@ -162,7 +223,8 @@ aiim/
 
 ### API测试
 
-导入 `AIIM.postman_collection.json` 到Postman进行API测试。
+1. **开发环境**: 查看 `/docs` 或 `/redoc` 进行交互式API测试
+2. **生产环境**: 使用专业API测试工具，参考技术方案文档中的API规范
 
 ## 🧪 测试
 
@@ -181,27 +243,39 @@ pytest tests/test_im_service.py -v
 
 ### 环境要求
 
+**基础运行环境:**
 - **Python**: 3.11+
-- **数据库**: PostgreSQL 12+ (生产推荐) 或 SQLite (开发)
-- **缓存**: Redis 6+ (生产必需)
+- **数据库**: PostgreSQL 15+ (推荐) 或 SQLite (开发)
+- **缓存**: Redis 7+ (生产必需)
 - **容器**: Docker + Docker Compose
 
-### 性能调优
+**音视频功能依赖 (v2.0):**
+- **对象存储**: MinIO 或 阿里云OSS
+- **TURN服务器**: coturn (用于NAT穿越)
+- **负载均衡**: Nginx (生产环境)
 
-- 启用Redis用于消息队列和序列生成
-- 使用PostgreSQL替代SQLite
-- 配置适当的worker数量
-- 启用连接池和缓存
+### 分布式部署架构
 
-### 监控
+```
+生产环境推荐配置:
+├── ECS-1 (2核2GB) - 主应用服务器
+│   ├── AIIM应用 + PostgreSQL + Redis
+│   └── Nginx反向代理
+└── ECS-2 (2核4GB) - 媒体服务器  
+    ├── coturn (TURN服务器)
+    └── MinIO (对象存储)
+```
 
-- Prometheus指标: `/metrics`
-- 健康检查: `/health`
-- 应用日志: 结构化JSON格式
+### 监控和可观测性
+
+- **健康检查**: `/health`, `/healthz`, `/ready`
+- **Prometheus指标**: `/metrics` - 业务和系统指标
+- **结构化日志**: JSON格式，支持集中化日志收集
+- **性能监控**: 请求响应时间、错误率、资源使用情况
 
 ## 🤝 贡献
 
-我们欢迎各种形式的贡献！请阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 了解详细信息。
+我们欢迎各种形式的贡献！
 
 ### 快速开始贡献
 
@@ -217,9 +291,8 @@ pytest tests/test_im_service.py -v
 
 ## 🔗 相关链接
 
-- [技术架构文档](IM%20服务技术方案.md)
-- [迁移指南](MIGRATION_TO_AIIM.md)
-- [WebSocket测试页面](ws_test.html)
+- [技术架构文档](aiim技术方案-v2.md) - 详细的v2.0技术方案
+- [部署脚本文档](../deployment-scripts/README.md) - 生产环境部署指南
 
 ## 📞 支持
 
