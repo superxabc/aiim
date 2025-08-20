@@ -20,7 +20,7 @@ AIIM是一个轻量级、高性能的即时消息服务，专为AI应用场景�
 
 ## 🚀 快速开始
 
-### 使用Docker Compose（推荐）
+### 开发环境
 
 ```bash
 # 克隆仓库
@@ -54,12 +54,22 @@ cp env.example .env
 DEV_AUTO_CREATE_TABLES=true uvicorn main:app --reload --port 8083
 ```
 
-### 生产部署
+### 生产环境部署
+
+⚠️ **重要提醒**：生产环境部署请使用专门的部署脚本，支持分布式架构和音视频功能。
 
 ```bash
-# 使用生产配置
-docker-compose -f docker-compose.prod.yml up -d
+# 生产环境部署（推荐）
+cd ../deployment-scripts
+
+# 主服务器部署（ECS-1: 2核2GB）
+./orchestration/deploy_complete_aiim_cluster.sh --role main --media-server <媒体服务器IP>
+
+# 媒体服务器部署（ECS-2: 2核4GB）  
+./orchestration/deploy_complete_aiim_cluster.sh --role media --main-server <主服务器IP>
 ```
+
+详细部署文档请参考 [deployment-scripts/README.md](../deployment-scripts/README.md)
 
 ## 🔧 配置说明
 

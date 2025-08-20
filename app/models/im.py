@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Literal
 
 from sqlalchemy import (
     Column,
@@ -44,6 +44,9 @@ class Conversation(Base):
     )
     messages = relationship(
         "IMMessage", back_populates="conversation", cascade="all, delete-orphan"
+    )
+    calls = relationship(
+        "CallLog", back_populates="conversation", cascade="all, delete-orphan"
     )
 
 
@@ -137,6 +140,51 @@ class MessageReceipt(Base):
     )
 
 
+class CallLog(Base):
+    __tablename__ = "call_logs"
+    call_id = Column(String, primary_key=True, default=lambda: f"call_{uuid.uuid4()}")
+    conversation_id = Column(
+        String, ForeignKey("conversations.conversation_id"), nullable=False, index=True
+    )
+    initiator_id = Column(String, nullable=False, index=True)
+    status = Column(
+        Enum(
+            "initiated",
+            "ringing",
+            "answered",
+            "completed",
+            "missed",
+            "rejected",
+            name="call_status_type",
+        ),
+        nullable=False,
+    )
+    start_time = Column(DateTime, default=datetime.utcnow)
+    answer_time = Column(DateTime, nullable=True)
+    end_time = Column(DateTime, nullable=True)
+    duration_sec = Column(Integer, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    conversation = relationship("Conversation", back_populates="calls")
+    participants = relationship(
+        "CallParticipant", back_populates="call", cascade="all, delete-orphan"
+    )
+
+
+class CallParticipant(Base):
+    __tablename__ = "call_participants"
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    call_id = Column(String, ForeignKey("call_logs.call_id"), nullable=False, index=True)
+    user_id = Column(String, nullable=False, index=True)
+    join_time = Column(DateTime, default=datetime.utcnow)
+    leave_time = Column(DateTime, nullable=True)
+
+    call = relationship("CallLog", back_populates="participants")
+
+
+# --- Pydantic Models for API Contracts ---
+
+
 class ConversationCreateRequest(BaseModel):
     type: str = Field("direct", pattern="^(direct|group)$")
     name: Optional[str] = None
@@ -190,3 +238,98 @@ class MessageCreateResponse(BaseModel):
 class MessageListResponse(BaseModel):
     conversation_id: str
     messages: List[MessageInList]
+
+
+class UploadTokenRequest(BaseModel):
+    conversation_id: str
+    filename: str
+    content_type: str
+    file_size: int = Field(..., gt=0, le=50*1024*1024)  # 最大50MB
+
+
+class UploadTokenResponse(BaseModel):
+    media_id: str
+    upload_url: str
+    expires_at: str
+    method: str = "PUT"
+
+
+class MediaUploadCompleteRequest(BaseModel):
+    media_id: str
+    conversation_id: str
+    file_hash: str = Field(..., min_length=64, max_length=64)  # SHA256
+    file_size: int
+
+
+class MediaMetadata(BaseModel):
+    media_id: str
+    filename: str
+    content_type: str
+    file_size: int
+    duration_ms: Optional[int] = None  # 音频时长(毫秒)
+    waveform_data: Optional[str] = None  # Base64编码的波形数据
+    thumbnail_url: Optional[str] = None  # 缩略图URL(图片文件)
+
+
+class AudioMessageContent(BaseModel):
+    media_id: str
+    filename: str
+    duration_ms: Optional[int] = None
+    file_size: int
+    waveform_data: Optional[str] = None
+
+
+class MediaDownloadResponse(BaseModel):
+    download_url: str
+    content_type: str
+    filename: str
+    file_size: int
+    expires_at: str
+
+
+# --- Pydantic Models for WebSocket Signaling ---
+
+
+class BaseSignal(BaseModel):
+    type: str
+
+
+class CallInitiateSignal(BaseSignal):
+    type: Literal["call.initiate"] = "call.initiate"
+    to_user_id: str
+    conversation_id: str
+
+
+class CallAcceptSignal(BaseSignal):
+    type: Literal["call.accept"] = "call.accept"
+    call_id: str
+
+
+class CallHangupSignal(BaseSignal):
+    type: Literal["call.hangup"] = "call.hangup"
+    call_id: str
+
+
+class WebRTCSignalPayload(BaseModel):
+    type: Literal["offer", "answer", "candidate"]
+    sdp: Optional[str] = None
+    candidate: Optional[dict] = None
+
+
+class WebRTCSignal(BaseSignal):
+    type: Literal["call.webrtc.signal"] = "call.webrtc.signal"
+    to_user_id: str
+    call_id: str
+    payload: WebRTCSignalPayload
+
+
+class ICEConfig(BaseModel):
+    iceServers: List[dict]
+
+
+class CallEventSignal(BaseSignal):
+    type: Literal["call.incoming", "call.accepted", "call.terminated", "call.rejected"]
+    call_id: str
+    from_user_id: Optional[str] = None
+    conversation_id: Optional[str] = None
+    config: Optional[ICEConfig] = None

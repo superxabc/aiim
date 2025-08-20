@@ -129,6 +129,15 @@ dmypy.json
 *.sqlite
 *.sqlite3
 im.db
+test_im.db
+
+# Test and Debug Files
+test_*.py
+test_*.html
+test_*.txt
+generate_*.py
+debug_*.py
+validate_features.py
 
 # IDE
 .idea/
@@ -160,4 +169,29 @@ alembic/versions/*.pyc
 # Project specific
 conversation_id:*
 type:*
+
+# Development and deployment files
+*.postman_collection.json
+logs/
+scripts/deploy.sh
+nginx/
+
+# Redundant documentation (use deployment-scripts/ instead)
+DEPLOYMENT.md
+CONTRIBUTING.md
+INFRASTRUCTURE.md
+API_TEST_GUIDE.md
+
+# Media files and temporary data
+media/
+uploads/
+*.wav
+*.mp3
+*.mp4
+*.webm
+
+# Backup files
+*.bak
+*.backup
+*.orig
 

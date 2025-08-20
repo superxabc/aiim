@@ -48,11 +48,14 @@ def get_current_user_id_from_request(request: Request) -> Optional[str]:
     if not token:
         token = request.query_params.get("token")
     if not token:
+        print(f"JWT Debug: No token found in request")
         return None
     try:
         payload = jwt.decode(
             token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM]
         )
+        print(f"JWT Debug: Successfully decoded token. Payload: {payload}")
         return payload.get("sub")
-    except Exception:
+    except Exception as e:
+        print(f"JWT Debug: Token decode failed. Token: {token[:50]}..., Error: {e}")
         return None

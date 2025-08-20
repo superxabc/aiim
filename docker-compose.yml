@@ -1,26 +1,85 @@
-version: '3.9'
+# AIIM开发环境配置
+# 注意：生产环境请使用 deployment-scripts/ 中的部署脚本
+
 services:
   redis:
-    image: redis:7
-  postgres:
-    image: postgres:15
-    environment:
-      POSTGRES_USER: im
-      POSTGRES_PASSWORD: im_pass
-      POSTGRES_DB: imdb
-  aiim:
-    build: .
-    image: aiim:local
-    depends_on:
-      - redis
-      - postgres
-    environment:
-      JWT_SECRET: please_change_me
-      REDIS_URL: redis://redis:6379
-      DATABASE_URL: postgresql+psycopg2://im:im_pass@postgres:5432/imdb
-      INSTANCE_ID: aiim-instance-1
-      RATE_LIMIT_PER_SEC: 10
-      DEV_AUTO_CREATE_TABLES: "true"
+    image: redis:7-alpine
+    restart: unless-stopped
     ports:
-      - "8083:8083"
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-aiim}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-aiim_dev_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-aiim_db}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-aiim}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      
+  aiim:
+    build: 
+      context: .
+      dockerfile: Dockerfile.prod
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      # 核心配置
+      JWT_SECRET: ${JWT_SECRET:-dev_change_me_in_production}
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-aiim}:${POSTGRES_PASSWORD:-aiim_dev_pass}@postgres:5432/${POSTGRES_DB:-aiim_db}
+      REDIS_URL: redis://redis:6379
+      REQUIRE_REDIS: "true"
+      DEV_AUTO_CREATE_TABLES: "true"
+      
+      # 服务配置
+      INSTANCE_ID: ${INSTANCE_ID:-aiim-dev-1}
+      RATE_LIMIT_PER_SEC: ${RATE_LIMIT_PER_SEC:-10}
+      
+      # 媒体存储配置 (开发环境使用外部服务)
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-""}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-""}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-""}
+      MINIO_BUCKET_NAME: ${MINIO_BUCKET_NAME:-aiim-media-dev}
+      MINIO_SECURE: ${MINIO_SECURE:-"false"}
+      
+      # STUN/TURN配置 (开发环境使用公共STUN)
+      STUN_SERVERS: ${STUN_SERVERS:-"stun:stun.l.google.com:19302"}
+      TURN_SERVER: ${TURN_SERVER:-""}
+      TURN_USERNAME: ${TURN_USERNAME:-""}
+      TURN_PASSWORD: ${TURN_PASSWORD:-""}
+    ports:
+      - "127.0.0.1:8083:8083"
+    volumes:
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local

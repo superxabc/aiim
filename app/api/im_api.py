@@ -56,6 +56,20 @@ async def create_message(
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token"
             )
+        
+        # 对于音频消息，验证media_id是否存在和有效
+        if req.type == "audio" and isinstance(req.content, dict):
+            media_id = req.content.get("media_id")
+            if media_id:
+                from app.core.media_storage import media_storage
+                # 验证媒体文件是否存在
+                metadata = media_storage.get_file_metadata(media_id, req.conversation_id)
+                if not metadata:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Media file {media_id} not found"
+                    )
+        
         # 生成 seq（在事件循环中）
         from app.core.seq import next_seq
 
